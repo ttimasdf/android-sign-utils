@@ -3,7 +3,6 @@
 import argparse
 import os.path
 import xml.etree.ElementTree as ET
-from pathlib import Path
 from tempfile import NamedTemporaryFile
 import subprocess
 import re
@@ -24,7 +23,7 @@ def main():
     parser.add_argument("-l", "--list", action='store_true', help="list certs in the device/file")
     parser.add_argument("-p", "--packages", action='store_true', help="print packages when listing certs")    
     parser.add_argument("-a", "--all", action='store_true', help="list all certs instead of 4 common certs")
-    parser.add_argument("src", help="device or packages.xml file")
+    parser.add_argument("src", nargs='?', default='', help="device or packages.xml file")
 
     args = parser.parse_args()
 
@@ -36,10 +35,16 @@ def main():
         dst = NamedTemporaryFile('w')
 
         devices = dict(s.split('\t') for s in subprocess.check_output(['adb', 'devices'], encoding='utf8').strip().split('\n')[1:])
-        assert devices and devices.popitem()[0].startswith(args.src), "Device not found"
-        assert len(devices) == 0, "multiple devices connected"
+        assert devices, "No device connected"
 
-        proc = subprocess.run('adb shell su root cat /data/system/packages.xml'.split(), stdout=subprocess.PIPE, encoding='utf8')
+        if len(devices) == 1:
+            proc = subprocess.run('adb shell su root cat /data/system/packages.xml'.split(), stdout=subprocess.PIPE, encoding='utf8')
+        else:
+            for d, n in devices.items():
+                if d.startswith(args.src):
+                    proc = subprocess.run(['adb', '-s', d, 'shell', 'su', 'root', 'cat', '/data/system/packages.xml'], stdout=subprocess.PIPE, encoding='utf8')
+                    break
+            assert proc in vars(), "Device not found"
         assert proc.returncode == 0, "packages.xml read error"
 
         tree = ET.fromstring(proc.stdout)

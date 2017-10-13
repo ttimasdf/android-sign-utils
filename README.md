@@ -8,7 +8,7 @@ It reads your current system certificates(through connected adb devices) and rep
 # Usage
 
 ```
-usage: certutils.py [-h] [-f FILE] [-t, --type cert_type] [-l] [-p] [-a] src
+usage: certutils.py [-h] [-f FILE] [-t, --type cert_type] [-l] [-p] [-a] [src]
 
 Parse and manipulate Android certs
 
@@ -22,7 +22,7 @@ optional arguments:
   -l, --list            list certs in the device/file
   -p, --packages        print packages when listing certs
   -a, --all             list all certs instead of 4 common certs
-```
+  ```
 
 
 # Notes
