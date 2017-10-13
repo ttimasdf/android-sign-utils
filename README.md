@@ -8,7 +8,7 @@ It reads your current system certificates(through connected adb devices) and rep
 # Usage
 
 ```
-usage: certutils.py [-h] [-f FILE] [-t, --type T, __TYPE] [-l] [-p] [-a] src
+usage: certutils.py [-h] [-f FILE] [-t, --type cert_type] [-l] [-p] [-a] src
 
 Parse and manipulate Android certs
 
@@ -18,11 +18,11 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   -f FILE, --file FILE  source ota zip to read new certs from
-  -t, --type T, __TYPE  certs to replace: sys,platform,shared,media
-  -l, --list            list certs in specified device/file
+  -t, --type cert_type  certs to replace: testkey,platform,shared,media
+  -l, --list            list certs in the device/file
   -p, --packages        print packages when listing certs
   -a, --all             list all certs instead of 4 common certs
-  ```
+```
 
 
 # Notes
