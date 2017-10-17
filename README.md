@@ -20,9 +20,9 @@ optional arguments:
   -f FILE, --file FILE  source ota zip to read new certs from
   -t, --type cert_type  certs to replace: testkey,platform,shared,media
   -l, --list            list certs in the device/file
-  -p, --packages        print packages when listing certs
+  -p, --packages        print corresoponding packages when listing certs
   -a, --all             list all certs instead of 4 common certs
-  ```
+```
 
 
 # Notes
@@ -37,8 +37,11 @@ t.find('package//cert[@key][@index={}]'.format(idx)).attrib['key']
 
 # Packages used to gather certs
 ContactsProvider com.android.providers.contacts : shared
+
 CalendarProvider com.android.providers.calendar : testkey
+
 DownloadProvider com.android.providers.downloads : media
+
 TelephonyProvider com.android.providers.telephony : platform
 
 
