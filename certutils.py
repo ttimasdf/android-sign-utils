@@ -55,8 +55,7 @@ def main():
         with open('packages.adb_{:.0f}.xml'.format(time()), 'w') as f:
             print(f.write(proc.stdout), "bytes backed up to", f.name)
 
-
-    if not args.file or args.list:              # -l : list certs
+    if not args.zipfile or args.list:              # -l : list certs
         if args.packages:                       # -p : list packages in cert entries
             cert_package_map = generateCertPkgMap(tree)
 
@@ -74,8 +73,8 @@ def main():
                 if args.packages:
                     printPkgs(cert_package_map, idx)
     else:
-        assert zipfile.is_zipfile(args.file), "Not a valid ZIP archive"
-        file = zipfile.ZipFile(args.file)
+        assert zipfile.is_zipfile(args.zipfile), "Not a valid ZIP archive"
+        file = zipfile.ZipFile(args.zipfile)
         pkcs7cert = file.read("META-INF/CERT.RSA")
         pemcert = subprocess.check_output("openssl pkcs7 -inform DER -print_certs".split(), input=pkcs7cert)
         dercert = subprocess.check_output('openssl x509 -outform DER'.split(), input=pemcert)
