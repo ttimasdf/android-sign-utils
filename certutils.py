@@ -4,8 +4,10 @@ import argparse
 import os.path
 import xml.etree.ElementTree as ET
 from tempfile import NamedTemporaryFile
+from time import time
 import subprocess
 import re
+import zipfile
 
 
 target_packages = {
@@ -28,49 +30,97 @@ def main():
     args = parser.parse_args()
 
     isFile = os.path.exists(args.src)
-    if isFile:
-        dst = open(args.src[:-4]+".modified.xml", 'w')
+    if isFile:                                  # src is a file
+        dst = open(args.src[:-4]+".modified.xml", 'w+b')
         tree = ET.parse(args.src)
-    else:
-        dst = NamedTemporaryFile('w')
-
-        devices = dict(s.split('\t') for s in subprocess.check_output(['adb', 'devices'], encoding='utf8').strip().split('\n')[1:])
+    else:                                       # src is an adb device
+        dst = NamedTemporaryFile(suffix=".xml")
+        devices = dict(s.split('\t') for s in subprocess.check_output(['adb', 'devices'], encoding='utf8').strip().split('\n')[1:])  # get a dict {'serial': 'name'}
         assert devices, "No device connected"
 
-        if len(devices) == 1:
-            proc = subprocess.run('adb shell su root cat /data/system/packages.xml'.split(), stdout=subprocess.PIPE, encoding='utf8')
-        else:
+        device = None
+        cmd = ['adb', 'shell', 'cat', '/data/system/packages.xml']
+        if len(devices) > 1:                              # with -s "device"
             for d, n in devices.items():
                 if d.startswith(args.src):
-                    proc = subprocess.run(['adb', '-s', d, 'shell', 'su', 'root', 'cat', '/data/system/packages.xml'], stdout=subprocess.PIPE, encoding='utf8')
+                    device = d
+                    cmd[1:1] = ['-s', device]
                     break
-            assert proc in vars(), "Device not found"
+            assert device, "Device not found"
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, encoding='utf8')
+
         assert proc.returncode == 0, "packages.xml read error"
 
         tree = ET.fromstring(proc.stdout)
+        with open('packages.adb_{:.0f}.xml'.format(time()), 'w') as f:
+            print(f.write(proc.stdout), "bytes backed up to", f.name)
 
-    if args.list:
-        if args.packages:
+
+    if not args.file or args.list:              # -l : list certs
+        if args.packages:                       # -p : list packages in cert entries
             cert_package_map = generateCertPkgMap(tree)
+
         if args.all:
-            for node in tree.findall('package//cert[@key]'):
-                idx = node.attrib['index']
-                printCert(node.attrib['key'], idx)
+            for node in tree.findall('package//cert[@key]'):  # find all certs with "key" attributes (cert may only stored once)
+                idx = node.get('index')
+                printCert(bytes.fromhex(node.get('key')), idx)
                 if args.packages:
                     printPkgs(cert_package_map, idx)
         else:
             for t, pkg in target_packages.items():
-                idx = tree.find('package[@name="{}"]//cert'.format(pkg)).attrib['index']
-                key = tree.find('package//cert[@key][@index="{}"]'.format(idx)).attrib['key']
-                printCert(key, t)
+                idx = tree.find('package[@name="{}"]//cert'.format(pkg)).get('index')
+                key = tree.find('package//cert[@key][@index="{}"]'.format(idx)).get('key')
+                printCert(bytes.fromhex(key), t)
                 if args.packages:
                     printPkgs(cert_package_map, idx)
+    else:
+        assert zipfile.is_zipfile(args.file), "Not a valid ZIP archive"
+        file = zipfile.ZipFile(args.file)
+        pkcs7cert = file.read("META-INF/CERT.RSA")
+        pemcert = subprocess.check_output("openssl pkcs7 -inform DER -print_certs".split(), input=pkcs7cert)
+        dercert = subprocess.check_output('openssl x509 -outform DER'.split(), input=pemcert)
+
+        print("\nTarget sign to replace:")
+        printCert(dercert, "TARGET_FILE")
+
+        assert input("Proceed?") == 'y', "User cancelled"
+        
+        # Change cert
+        idx = tree.find('package[@name="{}"]//cert'.format(target_packages['releasekey'])).get('index')
+        node = tree.find('package//cert[@key][@index="{}"]'.format(idx))
+        oldcert = node.get('key')
+        node.set('key', dercert.hex())
+
+        # Change key
+        oldkey = getPubKey(bytes.fromhex(oldcert))
+        node = tree.find('keyset-settings/keys/public-key[@value="{}"]'.format(oldkey))
+        node.set("value", getPubKey(dercert))
+
+        # Write file
+        assert not dst.closed, "output file closed? Whyyy??"
+        payload = ET.tostring(tree)
+        dst.write(payload)
+
+        print("Modified file saved at", dst.name)
+        if not isFile and input("Push back through ADB? [DANGEROUS]") == 'y':
+            cmd = 'adb shell twrp'.split()
+            if device:
+                cmd[1:1] = ['-s', device]
+            proc = subprocess.run(cmd)
+            assert proc.returncode == 0, "Not in recovery!"
+            cmd = ['adb', 'push', dst.name, '/data/system/packages.xml']
+            if device:
+                cmd[1:1] = ['-s', device]
+
+            proc = subprocess.run(cmd)
+            assert proc.returncode == 0, "Not in recovery or no root permission!"
+            print("Push complete! retcode:", proc.returncode)
 
 
 def printCert(cert, index=None):
     openssl_out = subprocess.check_output(
         'openssl x509 -noout -text -inform DER -fingerprint'.split(),
-        input=bytes.fromhex(cert)).decode()
+        input=cert).decode()
     subject = re.search("Subject:\s+(.*)", openssl_out)[1]
     issuer = re.search("Issuer:\s+(.*)", openssl_out)[1]
     # serial = re.search("Serial Number:\s+(.*)", openssl_out)[1]
@@ -83,8 +133,7 @@ def printCert(cert, index=None):
           "Subject: {}\n"
           "SHA1 Fingerprint: {}\n"
           "Cert: {}\n"
-          "PubKey: {}\n".format(subject, issuer, sig[:20]+'...', cert, getPubKey(cert)))
-          
+          "PubKey: {}\n".format(subject, issuer, sig[:20]+'...', cert.hex(), getPubKey(cert)))
 
 
 def printPkgs(m, idx):
@@ -99,17 +148,20 @@ def printPkgs(m, idx):
 def generateCertPkgMap(tree):
     ret = {}
     for pkg in tree.findall("package"):
-        idx = pkg.find('**/[@index]').attrib['index']
+        idx = pkg.find('**/[@index]').get('index')
         if idx not in ret:
             ret[idx] = []
-        ret[idx].append(pkg.attrib['name'])
+        ret[idx].append(pkg.get('name'))
     return ret
 
 
 def getPubKey(cert):
-    openssl_out = subprocess.check_output("openssl x509 -inform DER -pubkey -noout".split(), input=bytes.fromhex(cert)).decode()
+    openssl_out = subprocess.check_output("openssl x509 -inform DER -pubkey -noout".split(), input=cert).decode()
     return openssl_out.replace('\n', '')[26:-24]
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except AssertionError as e:
+        print("Error:", str(e))
