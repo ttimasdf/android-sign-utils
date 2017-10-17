@@ -20,7 +20,7 @@ target_packages = {
 
 def main():
     parser = argparse.ArgumentParser(description="Parse and manipulate Android certs")
-    parser.add_argument("-f", "--file", help="source ota zip to read new certs from")
+    parser.add_argument("-f", "--zipfile", help="source ota zip to read new certs from")
     parser.add_argument("-t, --type", metavar="cert_type", help="certs to replace: testkey,platform,shared,media")
     parser.add_argument("-l", "--list", action='store_true', help="list certs in the device/file")
     parser.add_argument("-p", "--packages", action='store_true', help="print corresoponding packages when listing certs")    
