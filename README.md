@@ -30,7 +30,7 @@ optional arguments:
 
 Suppose you want to migrate to an community build, from official one(or whatever previously "incompatible"). **Reboot to recovery**, connect your phone to PC and invoke the following command.
 ```
-./certutils.py -f ~/Downloads/lineage-14.1-20170930-UNOFFICIAL-Sultan-oneplus3.zip  # replace with your package
+./certutils.py -f [path-to-your-flashable.zip]
 ```
 And flash the rom with TWRP normally. volia!
 
