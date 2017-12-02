@@ -33,6 +33,7 @@ Suppose you want to migrate to an community build, from official one(or whatever
 ./certutils.py -f [path-to-your-flashable.zip]
 ```
 And flash the rom with TWRP normally. volia!
+*Edit:* Update packages.xml **ALONE** may be insufficient, use this project along with https://github.com/ttimasdf/OTAReCert is recommanded, refer to LineageOS Wiki and the gist above.
 
 
 Suppose you want to inspect what your system is signed with. (have a look at releasekey) 
